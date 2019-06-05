@@ -1,0 +1,18 @@
+#Python
+*.pyc
+__pycache__
+
+#3rd-party
+*.zip
+*.rar
+*.tar
+
+#Rich files
+*.docx
+*.mp4
+
+#Folders
+doc/
+junk/
+media/
+att_faces/
