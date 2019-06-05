@@ -90,7 +90,7 @@ def x2p(X, tol=1e-5, perplexity=30.0):
     return P
 
 
-def pca(X, dims=2):
+def pca(X, dim=2):
     '''
     Runs PCA on the NxD array X in order to reduce its dimensionality to
     dims dimensions.
@@ -98,17 +98,17 @@ def pca(X, dims=2):
     #guided by https://sebastianraschka.com/Articles/2014_pca_step_by_step.html
     M = (X - np.mean(X.T, axis=1)).T # Centralize the data. sum((x-m)(x-m)^T)
     S = np.cov(M) # The Scatter Matrix: 
-    eigval, eigvec = np.linalg.eig(S) #get the covariance
-    idx = np.argsort(eigval)[::-1] # sorting the eigenvalues in ascending order to get k first largest eigenvectors
+    eigval, eigvec = np.linalg.eig(S) # get the covariance
+    idx = np.argsort(eigval) # sorting the eigenvalues to get k first largest eigenvectors
     
     eigvec = eigvec[:,idx] # apply sorting idx
     eigval = eigval[idx]
     
-    Y = np.dot(eigvec[:,:dims].T, M) # project the data in the eigenspace
-    return Y, eigvec, eigval
+    X = np.dot(eigvec[:,-dim:].T, M).real.T # project the data in the eigenspace
+    return X, eigvec, eigval, S, M, idx
 
 
-def lda(X, dims=2):
+def lda(X, dim=2):
     '''
     Runs LDA on the NxD array X in order to reduce its dimensionality to
     dims dimensions.
