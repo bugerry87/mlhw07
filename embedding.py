@@ -104,8 +104,8 @@ def pca(X, dim=2):
     eigvec = eigvec[:,idx] # apply sorting idx
     eigval = eigval[idx]
     
-    X = np.dot(eigvec[:,-dim:].T, M).real.T # project the data in the eigenspace
-    return X, eigvec, eigval, S, M, idx
+    Y = np.dot(eigvec[:,-dim:].T, M).real.T # project the data in the eigenspace
+    return Y, eigvec, eigval, S, M, idx
 
 
 def lda(X, dim=2):
@@ -113,72 +113,76 @@ def lda(X, dim=2):
     Runs LDA on the NxD array X in order to reduce its dimensionality to
     dims dimensions.
     '''
+    #http://goelhardik.github.io/2016/10/04/fishers-lda/
+    total_mean = np.mean(X, axis=0)
     pass
 
 
-def tsne(X, dims=2, perplexity=30.0,):
+def tsne(X,
+    dim=2,
+    tol=1e-5,
+    perplexity=30.0,
+    exag=4.0,
+    min_p=1e-12,
+    mom_0=0.5,
+    mom_n=0.8,
+    min_gain=0.01,
+    eta=500,
+    max_iter=1000
+    ):
     '''
     Runs t-SNE on the dataset in the NxD array X to reduce its
-    dimensionality to dims dimensions. The syntaxis of the function is
-    `Y = tsne.tsne(X, dims, perplexity), where X is an NxD NumPy array.
+    dimensionality to dims dimensions.
     '''
 
     # Initialize variables
-    X = pca(X, X.shape[1]).real
+    X, _, _, _, _, _ = pca(X, X.shape[1])
     (n, d) = X.shape
-    max_iter = 1000
-    initial_momentum = 0.5
-    final_momentum = 0.8
-    eta = 500
-    min_gain = 0.01
-    Y = np.random.randn(n, dims)
-    dY = np.zeros((n, dims))
-    iY = np.zeros((n, dims))
-    gains = np.ones((n, dims))
+    Y = np.random.randn(n, dim)
+    dY = np.zeros((n, dim))
+    iY = np.zeros((n, dim))
+    gains = np.ones((n, dim))
 
     # Compute P-values
-    P = x2p(X, 1e-5, perplexity)
-    P = P + np.transpose(P)
+    P = x2p(X, tol, perplexity)
+    P = P + P.T
     P = P / np.sum(P)
-    P = P * 4.									# early exaggeration
-    P = np.maximum(P, 1e-12)
+    P = P * exag # early exaggeration. Lying about P?
+    P = np.max(P, min_p)
 
     # Run iterations
-    for iter in range(max_iter):
-
+    for step in range(max_iter):
         # Compute pairwise affinities
-        sum_Y = np.sum(np.square(Y), 1)
-        num = -2. * np.dot(Y, Y.T)
-        num = 1. / (1. + np.add(np.add(num, sum_Y).T, sum_Y))
-        num[range(n), range(n)] = 0.
+        sum_Y = np.sum(np.square(Y), axis=1)
+        num = -2.0 * np.dot(Y, Y.T)
+        num = np.inv(1.0 + np.add(np.add(num, sum_Y).T, sum_Y))
+        num[range(n), range(n)] = 0.0 #eliminate D
         Q = num / np.sum(num)
-        Q = np.maximum(Q, 1e-12)
+        Q = np.maximum(Q, min_p)
 
         # Compute gradient
         PQ = P - Q
         for i in range(n):
-            dY[i, :] = np.sum(np.tile(PQ[:, i] * num[:, i], (no_dims, 1)).T * (Y[i, :] - Y), 0)
+            dY[i, :] = np.sum(np.tile(PQ[:, i] * num[:, i], (dim, 1)).T * (Y[i, :] - Y), 0)
 
         # Perform the update
-        if iter < 20:
-            momentum = initial_momentum
+        if step < 20:
+            mom = mom_0
         else:
-            momentum = final_momentum
-        gains = (gains + 0.2) * ((dY > 0.) != (iY > 0.)) + \
-                (gains * 0.8) * ((dY > 0.) == (iY > 0.))
+            mom = mom_n
+        mask = (dY > 0.0) == (iY > 0.0)
+        gains = (gains + 0.2) * ~mask + (gains * 0.8) * mask # TODO: what's about these constants?!
         gains[gains < min_gain] = min_gain
-        iY = momentum * iY - eta * (gains * dY)
+        iY = mom * iY - eta * (gains * dY)
         Y = Y + iY
-        Y = Y - np.tile(np.mean(Y, 0), (n, 1))
+        Y = Y - np.tile(np.mean(Y, axis=0), (n, 1))
+        
+        # Stop lying about P-values. Please what?
+        if step == 100:
+            P = P / exag
 
         # Compute current value of cost function
-        if (iter + 1) % 10 == 0:
-            C = np.sum(P * np.log(P / Q))
-            print("Iteration %d: error is %f" % (iter + 1, C))
+        #err = np.sum(P * np.log(P / Q))
 
-        # Stop lying about P-values
-        if iter == 100:
-            P = P / 4.
-
-    # Return solution
-    return Y
+        # Yield solution
+        yield Y, P, Q, step
