@@ -26,13 +26,14 @@ def pca(X, dim=2):
     return x, eigvec, eigval, S, M, idx
 
 
-def lda(X, Y, C, dim=2):
+def lda(X, Y, dim=2):
     '''
     Runs LDA on the NxD array X in order to reduce its dimensionality to
     dims dimensions.
     '''
     #guided by http://goelhardik.github.io/2016/10/04/fishers-lda/
     d = X.shape[1] #dimension
+    C = np.unique(Y)
     K = len(C)
     tm = np.mean(X, axis=0) #total mean
     
@@ -50,11 +51,18 @@ def lda(X, Y, C, dim=2):
             SW += np.dot(xm[n][None,:], xm[n][:,None])
         SB += N * np.dot(mm.T, mm)
     
-    eigval, eigvec = np.linalg.eig(np.dot(np.linalg.pinv(SW), SB))
+    try:
+        SW = np.linalg.inv(SW)
+    except:
+        print("Warning: Fallback to pseudo inverse!")
+        SW = np.linalg.pinv(SW)
+    
+    eigval, eigvec = np.linalg.eigh(np.dot(SW, SB))
     idx = np.argsort(eigval)[::-1]
     eigvec = eigvec[:,idx]
-    w = eigvec[:,1:dim+1]
-    return np.dot(X, w).real
+    w = eigvec[:,:dim]
+    x = np.dot(X, w).real
+    return x, eigvec
 
 
 def Hbeta(D, beta=1.0):

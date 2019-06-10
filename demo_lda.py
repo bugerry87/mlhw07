@@ -74,14 +74,12 @@ def main(args):
     print("\nLoad data...")
     X = np.genfromtxt(args.data, delimiter=',')
     Y = np.genfromtxt(args.labels, delimiter=',')
-    C = np.unique(Y)
     
     print("\nCompute LDA...")
     K = np.max(Y)
-    x = lda(X, Y, C)
-    print(x.shape)
+    x, _ = lda(X, Y)
     
-    print("\nPlot the result...")
+    print("\nPlot the result...")    
     plt.title("LDA Final Result")
     plt.scatter(x[:,0], x[:,1], s=1, c=Y)
     plt.colorbar()
