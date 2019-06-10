@@ -25,7 +25,7 @@ def init_argparse(parents=[]):
         parser: The ArgumentParsers.
     '''
     parser = ArgumentParser(
-        description="Demo for embedding data via PCA",
+        description="Demo for embedding data via LDA",
         parents=parents
         )
     
@@ -74,23 +74,15 @@ def main(args):
     print("\nLoad data...")
     X = np.genfromtxt(args.data, delimiter=',')
     Y = np.genfromtxt(args.labels, delimiter=',')
+    C = np.unique(Y)
     
-    print("\nCompute PCA...")
-    x, eigvec, _, _, M, _ = pca(X)
-    N = eigvec.shape[1]
+    print("\nCompute LDA...")
+    K = np.max(Y)
+    x = lda(X, Y, C)
+    print(x.shape)
     
     print("\nPlot the result...")
-    for i in range(1, N, 10):
-        plt.clf()
-        X = np.dot(eigvec[:,(i-1,i)].T, M).real.T
-        plt.title("Eigenvecs {} & {}".format(i-1, i))
-        plt.scatter(X[:,1], X[:,0], s=1, c=Y)
-        plt.colorbar()
-        plt.show(block=False)
-        plt.pause(0.01)
-    
-    plt.clf()
-    plt.title("PCA Final Result")
+    plt.title("LDA Final Result")
     plt.scatter(x[:,0], x[:,1], s=1, c=Y)
     plt.colorbar()
     

@@ -8,6 +8,55 @@ Author: Gerald Baulig
 import numpy as np
 
 
+def pca(X, dim=2):
+    '''
+    Runs PCA on the NxD array X in order to reduce its dimensionality to
+    dims dimensions.
+    '''
+    #guided by https://sebastianraschka.com/Articles/2014_pca_step_by_step.html
+    M = (X - np.mean(X.T, axis=1)).T # Centralize the data. sum((x-m)(x-m)^T)
+    S = np.cov(M) # The Scatter Matrix: 
+    eigval, eigvec = np.linalg.eig(S) # get the covariance
+    idx = np.argsort(eigval)[::-1] # sorting the eigenvalues to get k first largest eigenvectors
+    
+    eigvec = eigvec[:,idx] # apply sorting idx
+    eigval = eigval[idx]
+    
+    x = np.dot(eigvec[:,:dim].T, M).real.T # project the data in the eigenspace
+    return x, eigvec, eigval, S, M, idx
+
+
+def lda(X, Y, C, dim=2):
+    '''
+    Runs LDA on the NxD array X in order to reduce its dimensionality to
+    dims dimensions.
+    '''
+    #guided by http://goelhardik.github.io/2016/10/04/fishers-lda/
+    d = X.shape[1] #dimension
+    K = len(C)
+    tm = np.mean(X, axis=0) #total mean
+    
+    SW = np.zeros((d,d)) #with in class scatter
+    SB = np.zeros((d,d))
+    for k in range(K):
+        c = C[k] #current class
+        a = Y==c #association
+        N = sum(a) #num of associations
+        x = X[a] #class subset
+        xm = x - np.mean(x, axis=0) #centralize class points
+        mm = xm - tm #centralize class
+        
+        for n in range(N):
+            SW += np.dot(xm[n][None,:], xm[n][:,None])
+        SB += N * np.dot(mm.T, mm)
+    
+    eigval, eigvec = np.linalg.eig(np.dot(np.linalg.pinv(SW), SB))
+    idx = np.argsort(eigval)[::-1]
+    eigvec = eigvec[:,idx]
+    w = eigvec[:,1:dim+1]
+    return np.dot(X, w).real
+
+
 def Hbeta(D, beta=1.0):
     '''
     Compute the perplexity and the P-row for a specific value of the
@@ -41,8 +90,8 @@ def x2p(X, tol=1e-5, perplexity=30.0):
     print("Computing pairwise distances...")
     (n, d) = X.shape
     sum_X = np.sum(np.square(X), 1)
-    D = np.add(np.add(-2 * np.dot(X, X.T), sum_X).T, sum_X)
-    P = np.zeros((n, n))
+    D = (-2 * np.dot(X, X.T) + sum_X).T + sum_X
+    P = np.zeros((n,n))
     beta = np.ones((n, 1))
     logU = np.log(perplexity)
 
@@ -62,7 +111,6 @@ def x2p(X, tol=1e-5, perplexity=30.0):
         Hdiff = H - logU
         tries = 0
         while np.abs(Hdiff) > tol and tries < 50:
-
             # If not, increase or decrease precision
             if Hdiff > 0:
                 betamin = beta[i].copy()
@@ -90,34 +138,6 @@ def x2p(X, tol=1e-5, perplexity=30.0):
     return P
 
 
-def pca(X, dim=2):
-    '''
-    Runs PCA on the NxD array X in order to reduce its dimensionality to
-    dims dimensions.
-    '''
-    #guided by https://sebastianraschka.com/Articles/2014_pca_step_by_step.html
-    M = (X - np.mean(X.T, axis=1)).T # Centralize the data. sum((x-m)(x-m)^T)
-    S = np.cov(M) # The Scatter Matrix: 
-    eigval, eigvec = np.linalg.eig(S) # get the covariance
-    idx = np.argsort(eigval) # sorting the eigenvalues to get k first largest eigenvectors
-    
-    eigvec = eigvec[:,idx] # apply sorting idx
-    eigval = eigval[idx]
-    
-    Y = np.dot(eigvec[:,-dim:].T, M).real.T # project the data in the eigenspace
-    return Y, eigvec, eigval, S, M, idx
-
-
-def lda(X, dim=2):
-    '''
-    Runs LDA on the NxD array X in order to reduce its dimensionality to
-    dims dimensions.
-    '''
-    #http://goelhardik.github.io/2016/10/04/fishers-lda/
-    total_mean = np.mean(X, axis=0)
-    pass
-
-
 def tsne(X,
     dim=2,
     tol=1e-5,
@@ -136,11 +156,10 @@ def tsne(X,
     '''
 
     # Initialize variables
-    X, _, _, _, _, _ = pca(X, X.shape[1])
     (n, d) = X.shape
-    Y = np.random.randn(n, dim)
-    dY = np.zeros((n, dim))
-    iY = np.zeros((n, dim))
+    x = np.random.randn(n, dim)
+    dx = np.zeros((n, dim))
+    ix = np.zeros((n, dim))
     gains = np.ones((n, dim))
 
     # Compute P-values
@@ -148,14 +167,14 @@ def tsne(X,
     P = P + P.T
     P = P / np.sum(P)
     P = P * exag # early exaggeration. Lying about P?
-    P = np.max(P, min_p)
+    P = np.maximum(P, min_p)
 
     # Run iterations
     for step in range(max_iter):
         # Compute pairwise affinities
-        sum_Y = np.sum(np.square(Y), axis=1)
-        num = -2.0 * np.dot(Y, Y.T)
-        num = np.inv(1.0 + np.add(np.add(num, sum_Y).T, sum_Y))
+        sum_x = np.sum(np.square(x), axis=1)
+        num = -2.0 * np.dot(x, x.T)
+        num = 1.0 / (1.0 + (num + sum_x).T + sum_x)
         num[range(n), range(n)] = 0.0 #eliminate D
         Q = num / np.sum(num)
         Q = np.maximum(Q, min_p)
@@ -163,26 +182,23 @@ def tsne(X,
         # Compute gradient
         PQ = P - Q
         for i in range(n):
-            dY[i, :] = np.sum(np.tile(PQ[:, i] * num[:, i], (dim, 1)).T * (Y[i, :] - Y), 0)
+            dx[i, :] = np.sum(np.tile(PQ[:, i] * num[:, i], (dim, 1)).T * (x[i, :] - x), 0)
 
         # Perform the update
         if step < 20:
             mom = mom_0
         else:
             mom = mom_n
-        mask = (dY > 0.0) == (iY > 0.0)
+        mask = (dx > 0.0) == (ix > 0.0)
         gains = (gains + 0.2) * ~mask + (gains * 0.8) * mask # TODO: what's about these constants?!
         gains[gains < min_gain] = min_gain
-        iY = mom * iY - eta * (gains * dY)
-        Y = Y + iY
-        Y = Y - np.tile(np.mean(Y, axis=0), (n, 1))
+        ix = mom * ix - eta * (gains * dx)
+        x = x + ix
+        x = x - np.tile(np.mean(x, axis=0), (n, 1))
         
         # Stop lying about P-values. Please what?
         if step == 100:
             P = P / exag
 
-        # Compute current value of cost function
-        #err = np.sum(P * np.log(P / Q))
-
         # Yield solution
-        yield Y, P, Q, step
+        yield x, P, Q, step
