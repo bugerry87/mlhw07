@@ -80,14 +80,27 @@ def main(args):
     N = eigvec.shape[1]
     
     print("\nPlot the result...")
-    for i in range(1, N, 10):
+    for i in range(N-1, 10, -10):
         plt.clf()
-        X = np.dot(eigvec[:,(i-1,i)].T, M).real.T
+        X = np.dot(eigvec[i-1:i+1], M).real.T
         plt.title("Eigenvecs {} & {}".format(i-1, i))
-        plt.scatter(X[:,1], X[:,0], s=1, c=Y)
+        plt.scatter(X[:,0], X[:,1], s=1, c=Y)
         plt.colorbar()
         plt.show(block=False)
         plt.pause(0.01)
+        if not plt.fignum_exists(1):
+            return 1
+        
+    for i in range(10, 0, -1):
+        plt.clf()
+        X = np.dot(eigvec[i-1:i+1], M).real.T
+        plt.title("Eigenvecs {} & {}".format(i-1, i))
+        plt.scatter(X[:,0], X[:,1], s=1, c=Y)
+        plt.colorbar()
+        plt.show(block=False)
+        plt.pause(0.01)
+        if not plt.fignum_exists(1):
+            return 1
     
     plt.clf()
     plt.title("PCA Final Result")

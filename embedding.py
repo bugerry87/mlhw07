@@ -14,16 +14,17 @@ def pca(X, dim=2):
     dims dimensions.
     '''
     #guided by https://sebastianraschka.com/Articles/2014_pca_step_by_step.html
-    M = (X - np.mean(X.T, axis=1)).T # Centralize the data. sum((x-m)(x-m)^T)
-    S = np.cov(M) # The Scatter Matrix: 
-    eigval, eigvec = np.linalg.eig(S) # get the covariance
+    m = np.mean(X.T, axis=1)
+    M = (X - m).T # Centralize the data.
+    S = np.cov(M) # The Scatter Matrix
+    eigval, eigvec = np.linalg.eigh(S) # get the covariance
     idx = np.argsort(eigval)[::-1] # sorting the eigenvalues to get k first largest eigenvectors
     
-    eigvec = eigvec[:,idx] # apply sorting idx
+    eigvec = eigvec[:,idx].T # apply sorting idx
     eigval = eigval[idx]
     
-    x = np.dot(eigvec[:,:dim].T, M).real.T # project the data in the eigenspace
-    return x, eigvec, eigval, S, M, idx
+    x = np.dot(eigvec[:dim], M).real.T # project the data in the eigenspace
+    return x, eigvec, eigval, S, M, m
 
 
 def lda(X, Y, dim=2):
@@ -34,13 +35,11 @@ def lda(X, Y, dim=2):
     #guided by http://goelhardik.github.io/2016/10/04/fishers-lda/
     d = X.shape[1] #dimension
     C = np.unique(Y)
-    K = len(C)
     tm = np.mean(X, axis=0) #total mean
     
     SW = np.zeros((d,d)) #with in class scatter
     SB = np.zeros((d,d))
-    for k in range(K):
-        c = C[k] #current class
+    for c in C:
         a = Y==c #association
         N = sum(a) #num of associations
         x = X[a] #class subset
