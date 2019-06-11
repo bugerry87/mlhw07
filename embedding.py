@@ -11,7 +11,18 @@ import numpy as np
 def pca(X, dim=2):
     '''
     Runs PCA on the NxD array X in order to reduce its dimensionality to
-    dims dimensions.
+    dim dimensions.
+    
+    Agrs:
+        X: The dataset.
+        dim: The number of dimensions to be reduced at.
+    Returns:
+        x: The reduced representations.
+        eigvec: The eigenvectors of the scatter matrix.
+        eigval: The eigenvalues of the scatter matrix.
+        S: The scatter matrix.
+        M: The centralized dataset.
+        m: The mean of the dataset.
     '''
     #guided by https://sebastianraschka.com/Articles/2014_pca_step_by_step.html
     m = np.mean(X.T, axis=1)
@@ -47,7 +58,7 @@ def lda(X, Y, dim=2):
         mm = xm - tm #centralize class
         
         for n in range(N):
-            SW += np.dot(xm[n][None,:], xm[n][:,None])
+            SW += np.dot(xm[n][None,:], xm[n][:,None]) / X.shape[0]
         SB += N * np.dot(mm.T, mm)
     
     try:
