@@ -78,15 +78,18 @@ def main(args):
     print("\nCompute t-SNE...")
     X, _, _, _, _, _ = pca(X)
     
-    for x, P, Q, step in tsne(X):
+    for x, err, step in tsne(X):
         # Compute current value of cost function
-        err = np.sum(P * np.log(P / Q))
         plt.clf()
         plt.title("t-SNE step {}: Error {}".format(step, err))
         plt.scatter(x[:,0], x[:,1], s=1, c=Y)
         plt.colorbar()
         plt.show(block=False)
         plt.pause(0.01)
+        if step % 5 == 0:
+            plt.savefig('media/t-SNE_asym_{0:04d}.png'.format(step))
+        if not plt.fignum_exists(1):
+            return 1
     
     print("\nDone!")
     plt.show()

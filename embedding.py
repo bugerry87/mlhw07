@@ -42,31 +42,38 @@ def lda(X, Y, dim=2):
     '''
     Runs LDA on the NxD array X in order to reduce its dimensionality to
     dims dimensions.
+    
+    Args:
+        X: The dataset.
+        Y: The labels.
+        dim: The number of dimensions to be reduced at.
+    Returns:
+        x: The reduced representations.
+        eigvec: The eigenvectors of the scatter matrix.
+            (W = eigvec[:dim])
     '''
-    #guided by http://goelhardik.github.io/2016/10/04/fishers-lda/
-    d = X.shape[1] #dimension
-    C = np.unique(Y)
-    tm = np.mean(X, axis=0) #total mean
-    
-    SW = np.zeros((d,d)) #with in class scatter
-    SB = np.zeros((d,d))
-    for c in C:
-        a = Y==c #association
-        N = sum(a) #num of associations
-        x = X[a] #class subset
-        xm = x - np.mean(x, axis=0) #centralize class points
-        mm = xm - tm #centralize class
-        
-        for n in range(N):
-            SW += np.dot(xm[n][None,:], xm[n][:,None]) / X.shape[0]
-        SB += N * np.dot(mm.T, mm)
-    
+    C = np.unique(Y) #classes
+    A = np.zeros((X.shape[0],len(C))) #association matrix
+    for idx, c in enumerate(C):
+        A[Y==c,idx] = 1
+    N = np.sum(A, axis=0) #num of associations
+
+    xm = np.dot(X.T, A) / N
+    tm = np.mean(X, axis=0)
+    mm = xm - tm[:,None]
+    SB = np.dot(mm * N, mm.T)
+    W = X.T - np.dot(xm, A.T)
+    SW = np.zeros(SB.shape)
+    for idx, c in enumerate(C):
+        w = W[:,Y==c]
+        SW += np.dot(w, w.T) / N[idx]
+
     try:
         SW = np.linalg.inv(SW)
     except:
         print("Warning: Fallback to pseudo inverse!")
         SW = np.linalg.pinv(SW)
-    
+
     eigval, eigvec = np.linalg.eigh(np.dot(SW, SB))
     idx = np.argsort(eigval)[::-1]
     eigvec = eigvec[:,idx]
@@ -94,7 +101,7 @@ def Hbeta(D, beta=1.0):
     return H, P
 
 
-def x2p(X, tol=1e-5, perplexity=30.0):
+def x2p(X, tol=1e-5, perplexity=30.0, sym=False):
     '''
     Performs a binary search to get P-values in such a way that each
     conditional Gaussian has the same perplexity.
@@ -116,8 +123,8 @@ def x2p(X, tol=1e-5, perplexity=30.0):
     # Loop over all datapoints
     for i in range(n):
         # Print progress
-        if i % 500 == 0:
-            print("Computing P-values for point %d of %d..." % (i, n))
+        if (i+1) % 500 == 0:
+            print("Computed %d of %d P-values." % (i+1, n))
 
         # Compute the Gaussian kernel and entropy for the current precision
         betamin = -np.inf
@@ -166,7 +173,9 @@ def tsne(X,
     mom_n=0.8,
     min_gain=0.01,
     eta=500,
-    max_iter=1000
+    epsilon=1.0,
+    max_iter=1000,
+    sym=False
     ):
     '''
     Runs t-SNE on the dataset in the NxD array X to reduce its
@@ -181,7 +190,7 @@ def tsne(X,
     gains = np.ones((n, dim))
 
     # Compute P-values
-    P = x2p(X, tol, perplexity)
+    P = x2p(X, tol, perplexity, sym)
     P = P + P.T
     P = P / np.sum(P)
     P = P * exag # early exaggeration. Lying about P?
@@ -213,10 +222,15 @@ def tsne(X,
         ix = mom * ix - eta * (gains * dx)
         x = x + ix
         x = x - np.tile(np.mean(x, axis=0), (n, 1))
-        
-        # Stop lying about P-values. Please what?
-        if step == 100:
+         
+        if step == 100: # Stop lying about P-values. Please what?
             P = P / exag
+        
+        err = np.sum(P * np.log(P / Q))
 
-        # Yield solution
-        yield x, P, Q, step
+        yield x, err, step # Yield solution
+        
+        if err <= epsilon: # Terminate on convergation
+            break
+        
+        

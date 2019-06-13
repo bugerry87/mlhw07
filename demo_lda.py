@@ -77,7 +77,7 @@ def main(args):
     
     print("\nCompute LDA...")
     K = np.max(Y)
-    x, _ = lda(X, Y)
+    x, _, SW1, SB1 = lda(X, Y)
     
     print("\nPlot the result...")    
     plt.title("LDA Final Result")

@@ -62,6 +62,8 @@ def load_dataset(root):
 
 
 def img_tiling(X, shape):
+    if len(X.shape) < 2:
+        X = X[None]
     N = X.shape[0]
     w = shape[1]
     h = shape[0]
@@ -76,6 +78,17 @@ def img_tiling(X, shape):
             tiles[r*h:(r+1)*h, c*w:(c+1)*w] = x
             
     return tiles
+
+
+def reconstruct(X, eigfaces, mean):
+    X = X - mean #centralize the data
+    Y = mean #start with the mean
+    yield X #At stage 0 we yield the ground truth
+    
+    for ef in eigfaces:
+        w = np.dot(X, ef[:,None])
+        Y += ef * w
+        yield Y
 
 
 def main(args):
@@ -104,7 +117,7 @@ def main(args):
     print("Loaded label shape: {}".format(Y.shape))
     
     print("\nCompute PCA...")
-    x, eigvec, eigval, _, _, m = pca(X)
+    x, eigvec, _, _, _, m = pca(X)
     
     print("\nPlot the result...")
     plt.figure(1)
@@ -116,14 +129,26 @@ def main(args):
     plt.axis('off')
     plt.title("Eigenfaces")
     tiles = img_tiling(eigvec[:25], (112,92))
-    plt.imshow(tiles)
+    plt.imshow(tiles, cmap='gray')
+    
+    ridx = np.random.randint(X.shape[0], size=10) #select 10 random images
+    rX = X[ridx]
+    recons = []
+
+    print("\nReconstruct eigenfaces...")
+    for rx in rX:
+        for i, y in enumerate(reconstruct(rx, eigvec[:10000], m)):
+            if i % 1000 == 0:
+                recons.append(y)
+        recons.append(y)
     
     plt.figure(3)
     plt.axis('off')
     plt.title("Reconstruction")
-    recons = np.dot(eigvec[:10].T, eigval[:10]) + m
+    recons = np.array(recons)
+    print(recons.shape)
     recons = img_tiling(recons, (112,92))
-    plt.imshow(recons)
+    plt.imshow(recons, cmap='gray')
     
     print("\nDone!")
     plt.show()
