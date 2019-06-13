@@ -42,6 +42,13 @@ def init_argparse(parents=[]):
         help="The filename of a csv with labels.",
         default=None
         )
+        
+    parser.add_argument(
+        '--save', '-s',
+        metavar='PATH',
+        help="Path to save images at.",
+        default=None
+        )
     
     return parser
 
@@ -78,16 +85,32 @@ def main(args):
     print("\nCompute t-SNE...")
     X, _, _, _, _, _ = pca(X)
     
-    for x, err, step in tsne(X):
+    for x, err, P, Q, step in tsne(X, sym=True, epsilon=0.5):
         # Compute current value of cost function
+        plt.figure(1)
         plt.clf()
         plt.title("t-SNE step {}: Error {}".format(step, err))
         plt.scatter(x[:,0], x[:,1], s=1, c=Y)
         plt.colorbar()
+        
+        if args.save:
+            if step % 5 == 0:
+                plt.savefig('media/t-SNE_sym_{0:04d}.png'.format(step))
+            
+        
+        plt.figure(2)
+        plt.clf()
+        plt.title("High dimensional similarity")
+        plt.imshow(P)
+        
+        plt.figure(3)
+        plt.clf()
+        plt.title("Low dimensional similarity")
+        plt.imshow(Q)
+        
         plt.show(block=False)
         plt.pause(0.01)
-        if step % 5 == 0:
-            plt.savefig('media/t-SNE_asym_{0:04d}.png'.format(step))
+        
         if not plt.fignum_exists(1):
             return 1
     

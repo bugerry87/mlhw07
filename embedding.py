@@ -101,7 +101,69 @@ def Hbeta(D, beta=1.0):
     return H, P
 
 
-def x2p(X, tol=1e-5, perplexity=30.0, sym=False):
+def x2p_asym(X, tol=1e-5, perplexity=30.0):
+    '''
+    Performs a binary search to get P-values in such a way that each
+    conditional Gaussian has the same perplexity.
+    
+    Args:
+    
+    Returns:
+    '''
+
+    # Initialize some variables
+    print("Computing pairwise distances...")
+    (n, d) = X.shape
+    sum_X = np.sum(np.square(X), 1)
+    D = (-2 * np.dot(X, X.T) + sum_X).T + sum_X
+    P = np.zeros((n,n))
+    beta = np.ones((n, 1))
+    logU = np.log(perplexity)
+
+    # Loop over all datapoints
+    for i in range(n):
+        # Print progress
+        if (i+1) % 500 == 0:
+            print("Computed %d of %d P-values." % (i+1, n))
+
+        # Compute the Gaussian kernel and entropy for the current precision
+        betamin = -np.inf
+        betamax = np.inf
+        Di = D[i, np.concatenate((np.r_[0:i], np.r_[i+1:n]))]
+        (H, thisP) = Hbeta(Di, beta[i])
+
+        # Evaluate whether the perplexity is within tolerance
+        Hdiff = H - logU
+        tries = 0
+        while np.abs(Hdiff) > tol and tries < 50:
+            # If not, increase or decrease precision
+            if Hdiff > 0:
+                betamin = beta[i].copy()
+                if betamax == np.inf or betamax == -np.inf:
+                    beta[i] = beta[i] * 2.
+                else:
+                    beta[i] = (beta[i] + betamax) / 2.
+            else:
+                betamax = beta[i].copy()
+                if betamin == np.inf or betamin == -np.inf:
+                    beta[i] = beta[i] / 2.
+                else:
+                    beta[i] = (beta[i] + betamin) / 2.
+
+            # Recompute the values
+            (H, thisP) = Hbeta(Di, beta[i])
+            Hdiff = H - logU
+            tries += 1
+
+        # Set the final row of P
+        P[i, np.concatenate((np.r_[0:i], np.r_[i+1:n]))] = thisP
+
+    # Return final P-matrix
+    print("Mean value of sigma: %f" % np.mean(np.sqrt(1 / beta)))
+    return P
+
+
+def x2p_sym(X, tol=1e-5, perplexity=30.0):
     '''
     Performs a binary search to get P-values in such a way that each
     conditional Gaussian has the same perplexity.
@@ -190,7 +252,7 @@ def tsne(X,
     gains = np.ones((n, dim))
 
     # Compute P-values
-    P = x2p(X, tol, perplexity, sym)
+    P = x2p_sym(X, tol, perplexity) if sym else x2p_sym(X, tol, perplexity)
     P = P + P.T
     P = P / np.sum(P)
     P = P * exag # early exaggeration. Lying about P?
@@ -201,15 +263,24 @@ def tsne(X,
         # Compute pairwise affinities
         sum_x = np.sum(np.square(x), axis=1)
         num = -2.0 * np.dot(x, x.T)
-        num = 1.0 / (1.0 + (num + sum_x).T + sum_x)
+ 
+        if sym:
+            num = np.exp(-1.0 * ((num + sum_x).T + sum_x))
+        else:
+            num = 1.0 / (1.0 + (num + sum_x).T + sum_x)
+        
         num[range(n), range(n)] = 0.0 #eliminate D
         Q = num / np.sum(num)
         Q = np.maximum(Q, min_p)
 
         # Compute gradient
         PQ = P - Q
-        for i in range(n):
-            dx[i, :] = np.sum(np.tile(PQ[:, i] * num[:, i], (dim, 1)).T * (x[i, :] - x), 0)
+        if sym:
+            for i in range(n):
+                dx[i, :] = np.sum(np.tile(PQ[:,i], (dim, 1)).T * (x[i,:] - x), 0)
+        else:
+            for i in range(n):
+                dx[i, :] = np.sum(np.tile(PQ[:,i] * num[:,i], (dim,1)).T * (x[i,:] - x), 0)
 
         # Perform the update
         if step < 20:
@@ -228,7 +299,7 @@ def tsne(X,
         
         err = np.sum(P * np.log(P / Q))
 
-        yield x, err, step # Yield solution
+        yield x, err, P, Q, step # Yield solution
         
         if err <= epsilon: # Terminate on convergation
             break

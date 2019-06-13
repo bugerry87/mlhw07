@@ -61,20 +61,20 @@ def load_dataset(root):
     return X, Y
 
 
-def img_tiling(X, shape):
+def img_tiling(X, shape, rows=None, cols=None):
     if len(X.shape) < 2:
         X = X[None]
     N = X.shape[0]
     w = shape[1]
     h = shape[0]
-    cols = int(np.floor(np.sqrt(N)))
-    rows = int(np.ceil(N/cols))
+    cols = cols if cols else int(np.floor(np.sqrt(N)))
+    rows = rows if rows else int(np.ceil(N/cols))
     tiles = np.zeros((rows*h, cols*w))
     
     for r in range(rows):
         for c in range(cols):
-            n = r+c
-            x = np.reshape(X[n,:], shape)
+            n = r * cols + c
+            x = np.reshape(X[n], shape)
             tiles[r*h:(r+1)*h, c*w:(c+1)*w] = x
             
     return tiles
@@ -88,8 +88,8 @@ def reconstruct(X, eigfaces, mean):
     
     for ef in eigfaces:
         w = np.dot(X, ef[:,None])
-        Y += ef * w
-        yield Y
+        Y = Y + ef * w
+        yield Y #Now we yield one reconstruction after another
 
 
 def main(args):
@@ -105,7 +105,7 @@ def main(args):
     #Validate input. If not given switch to interactive mode!
     print("Validate input...")
     args.root = args.root if args.root else myinput(
-        "The root folder ORL face dataset.\n" + 
+        "The root folder of ORL face dataset.\n" + 
         "    root ({}): ".format(DEFAULT_ROOT),
         default=DEFAULT_ROOT
         )
@@ -138,17 +138,18 @@ def main(args):
 
     print("\nReconstruct eigenfaces...")
     for rx in rX:
-        for i, y in enumerate(reconstruct(rx, eigvec[:10000], m)):
-            if i % 1000 == 0:
+        for i, y in enumerate(reconstruct(rx, eigvec[:100], m)):
+            if i < 2:
                 recons.append(y)
-        recons.append(y)
+            elif i % 10 == 0:
+                recons.append(y)
     
     plt.figure(3)
     plt.axis('off')
     plt.title("Reconstruction")
     recons = np.array(recons)
     print(recons.shape)
-    recons = img_tiling(recons, (112,92))
+    recons = img_tiling(recons, (112,92), 10, 12)
     plt.imshow(recons, cmap='gray')
     
     print("\nDone!")
