@@ -81,9 +81,10 @@ def img_tiling(X, shape):
 
 
 def reconstruct(X, eigfaces, mean):
+    yield X #At stage 0 we yield the ground truth
     X = X - mean #centralize the data
     Y = mean #start with the mean
-    yield X #At stage 0 we yield the ground truth
+    yield Y #At stage 1 we yield the mean face
     
     for ef in eigfaces:
         w = np.dot(X, ef[:,None])
